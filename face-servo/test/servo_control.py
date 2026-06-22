@@ -16,3 +16,4 @@ for angle in [0, 90, 180, 90]:
     time.sleep(1)
 
 ser.close()
+

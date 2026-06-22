@@ -60,9 +60,11 @@ try:
             print('Face detected! (' + str(len(faces)) + ' face(s) )', flush=True)
             if now - last_sweep >= 10:
                 sweep_servo()
+            
                 last_sweep = now
         else:
             print('No face - scanning...', flush=True)
+        
 
         time.sleep(0.5)
 
@@ -71,3 +73,4 @@ except KeyboardInterrupt:
 
 cap.release()
 ser.close()
+
