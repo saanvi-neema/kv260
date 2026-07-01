@@ -1,76 +1,88 @@
-# KV260 Face Detection + Servo Control
+# Face Detection Servo Project
 
-Real-time face detection on the AMD Kria KV260, with a physical servo response via an Arduino Mega 2560. When a face is detected, the servo sweeps automatically. A live MJPEG stream is accessible from any browser on the local network.
+## What does it do?
 
----
+This project uses a camera to detect faces in real time. When a face is detected, it automatically moves a servo motor. The live camera feed can be viewed from brower on phone or laptop.
 
-## Hardware
+Here is the basic idea:
 
-| Component | Details |
-|---|---|
-| AMD Kria KV260 | Runs Python, OpenCV, Flask |
-| Elegoo Mega 2560 | Controls the servo via serial |
-| USB Webcam | Connected to KV260 |
-| Servo Motor | Attached to pin 9 on the Mega |
-| USB-A to USB-B cable | KV260 → Mega serial link |
-
----
-
-## How It Works
-
-1. KV260 captures webcam frames and runs OpenCV Haar Cascade face detection
-2. When a face is detected, the KV260 sends an angle over USB serial to the Mega
-3. The Mega moves the servo to that angle
-4. A sweep (`0° → 90° → 180° → 90° → 0°`) triggers every 10 seconds while a face is present
-5. A live annotated video stream is served at `http://kria.local:5000`
-
----
-
-## Files
-
-| File | Description |
-|---|---|
-| `kria_app.py` | Main app — Flask web UI, face detection loop, servo control |
-| `servo_test.ino` | Arduino sketch for the Elegoo Mega |
-
----
-
-## Setup
-
-### Arduino (Elegoo Mega 2560)
-
-1. Open `servo_test.ino` in the Arduino IDE
-2. Upload to the Mega
-3. Connect the Mega to the KV260 via USB
-
-### KV260
-
-Install dependencies:
-
-```bash
-pip install flask pyserial opencv-python
+```
+Camera → KV260 board sees a face → tells Arduino → servo moves
+                    ↕
+             the browser
+             http://192.168.68.200:5000
+             [Start] [Stop] + live video
 ```
 
-Run the main app:
+---
 
+## The Hardware
+
+### AMD Kria KV260
+This is a small but powerful computer board made by AMD. It runs Linux like a regular computer, so we can write and run normal Python code on it.
+
+It looks at the camera 15-20 times per second and figures out if there is a face in the image. When a face is detected, the KV260 sends a string (ex: "90") to the Arduino. It also runs the website that is opened on browser.
+
+### Arduino Mega 2560 (Elegoo)
+The KV260 is good at AI and running software, but it cannot directly control a servo motor. Servo motors need a precise electrical signal that has to arrive at exactly the right time, every few milliseconds. The KV260 can't guarantee that.
+
+The Arduino waits for the KV260 to say "move to this angle" and then it moves the servo perfectly.
+
+The two boards talk to each other over a USB cable.
+
+### SG90 Servo Motor
+A small hobby servo that can rotate to any angle between 0° and 180°. The servo motor is connected to the Arduino's 5V, GND, and digital ping 9. When a face is detected, it sweeps from one side to the other and back. 
+
+### USB Webcam (Logitech)
+Plugged into the KV260. This is what sees the faces.
+
+---
+
+## The Software
+
+**On the KV260 — `kria_app.py`**
+A Python program that does three things at once:
+- Reads frames from the webcam and scans for faces using OpenCV (a computer vision library)
+- Streams the live video to the phone's browser
+- Sends a "move" command to the Arduino whenever a face is detected
+
+**On the Arduino — `servo_test.ino`**
+A program (called a "sketch") uploaded to the Arduino. It listens for angle numbers coming from the KV260 and moves the servo to that angle.
+
+The Arduino sketch only needs to be uploaded once. After that it lives on the Arduino.
+
+---
+
+## How to run
+
+### First time only — set up the Arduino
+Open `servo_test.ino` in the Arduino IDE and upload it to the Elegoo Mega. This only needs to be done once.
+
+### Every time — start the app
+
+SSH into the KV260 and run:
 ```bash
-python3 kria_app.py
+ssh ubuntu@192.168.68.200
+# password: amdkria
+
+cd ~/robotics
+source /home/ubuntu/vitis-env/bin/activate
+nohup python -u kria_app.py > kria_app.log 2>&1 &
 ```
 
-Open in a browser: `http://kria.local:5000`
+Then open the browser and go to:
+```
+http://192.168.68.200:5000
+```
 
-Flask serves the web UI and the live MJPEG stream. It runs on the KV260 and is accessible from any device on the same network — phone, laptop, etc.
+Tap **Start** and the camera will turn on. Stand about 1-2 meters away and a green box will appear around the face. Every 10 seconds that a face is visible, the servo will sweep back and forth.
+
+Tap **Stop** to turn everything off.
 
 ---
 
-## Serial Protocol
+## Things to watch out for
 
-The KV260 sends a plain integer string (e.g. `"90"`) over `/dev/ttyACM0` at 9600 baud. The Mega reads it with `Serial.parseInt()` and moves the servo to that angle (0–180°).
-
----
-
-## Notes
-
-- The Mega needs ~4 seconds after serial connect before it accepts commands
-- If the Mega enumerates as `/dev/ttyACM1`, update the port in the Python scripts
-- The servo sweep is rate-limited to once every 10 seconds to avoid jitter
+- **Stand 1-2 meters from the camera** — too close and it can't see the whole face
+- **The Arduino takes a moment to wake up** — the app waits 4 seconds after connecting before sending any commands, so the servo may not move immediately
+- **Only one program can control the servo at a time** — make sure no other scripts are running before starting the app
